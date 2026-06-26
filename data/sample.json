@@ -1,0 +1,16 @@
+{
+  "alias": "示例服务器",
+  "host": "127.0.0.1",
+  "port": 8080,
+  "password": "your-password",
+  "commands": [
+    {
+      "alias": "查看系统版本",
+      "command": "uname -a"
+    },
+    {
+      "alias": "查看磁盘空间",
+      "command": "df -h"
+    }
+  ]
+}
