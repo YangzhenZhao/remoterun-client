@@ -74,3 +74,9 @@ npm run preview
 - 目标接口：`POST http://host:port/run`
 - 请求体：`{ "command": "...", "password": "..." }`
 - 响应体：兼容 `success / exit_code / stdout / stderr / combined_log`
+
+## 生产环境测试使用
+
+```bash
+npm run dev -- --host 0.0.0.0 --port 5173
+```
