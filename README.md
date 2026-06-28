@@ -15,7 +15,7 @@
 - 会话通过 `HttpOnly Cookie` 保存，前端脚本无法直接读取
 - 关键写操作要求携带 `X-CSRF-Token`，并校验请求来源
 - 服务端返回 `CSP / X-Frame-Options / X-Content-Type-Options` 等安全响应头
-- 服务器配置仍保存在项目根目录 `data/`
+- 服务器和命令配置存放在 `PostgreSQL`
 - 浏览器只看到命令别名，不会拿到远端密码和真实命令内容
 
 ## 项目结构
@@ -24,7 +24,6 @@
 .
 ├── backend/        # Gin + PostgreSQL 后端
 ├── nginx/          # Docker 部署时的前端反向代理配置
-├── data/           # 服务器 JSON 配置
 └── src/            # Vue 前端
 ```
 
@@ -84,7 +83,6 @@ docker-compose down -v
 
 说明：
 
-- `data/` 会挂载到后端容器中的 `/app/data`
 - 首次启动会自动初始化数据库，并根据 `.env` 中的 `ADMIN_USERNAME / ADMIN_PASSWORD` 创建或更新管理员账号
 - 生产环境建议将 `COOKIE_SECURE=true`，并把 `APP_ORIGIN` 改成真实 HTTPS 域名
 
@@ -99,7 +97,7 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 
 # 如果你的环境只支持旧版命令
-docker-compose -f docker-compose.dev.yml up --build
+docker-compose -f docker-compose.dev.yml up -d --build 
 ```
 
 如果出现 `unknown shorthand flag: 'f' in -f` 这类报错，通常表示当前 Docker 环境没有启用 Compose V2，请改用 `docker-compose`。
@@ -120,34 +118,15 @@ docker-compose -f docker-compose.dev.yml up --build
 
 如果你不使用 Docker，仍然可以按下面方式分别启动前后端。
 
-## 数据目录格式
+## 服务器数据
 
-在 `data/` 目录新增任意 `.json` 文件即可，文件名会作为服务器 ID。
+服务器信息和命令配置已存放到数据库中，不再依赖项目根目录 `data/` 下的 JSON 文件。
 
-```json
-{
-  "alias": "生产环境",
-  "host": "10.0.0.8",
-  "port": 8080,
-  "password": "your-password",
-  "commands": [
-    {
-      "alias": "查看版本",
-      "command": "cat /opt/app/version.txt"
-    },
-    {
-      "alias": "重启服务",
-      "command": "systemctl restart my-app"
-    }
-  ]
-}
-```
+当前推荐方式：
 
-注意：
-
-- `sample.json` 永远不会出现在页面中
-- `password` 只保留在后端内存和请求转发阶段，浏览器拿不到
-- 页面上只显示命令别名，不暴露具体命令内容
+- 登录后直接在前端“服务器列表”页手动新增服务器
+- 后端把服务器和命令保存到 `servers / server_commands` 两张表
+- 浏览器只看到命令别名，不会拿到密码和真实命令内容
 
 ## 启动 PostgreSQL
 
@@ -172,7 +151,6 @@ cp .env.example .env
 APP_ADDR=:8080
 ALLOWED_ORIGIN=http://localhost:5173
 COOKIE_SECURE=false
-DATA_DIR=../data
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/remoterun?sslmode=disable
 SESSION_NAME=remoterun_session
 SESSION_SECRET=replace-with-a-random-32-char-secret
@@ -197,7 +175,7 @@ set +a
 go run ./cmd/server
 ```
 
-后端会自动创建 `users` 表。
+后端会自动创建 `users / servers / server_commands` 表。
 
 ## 启动前端
 
@@ -244,6 +222,7 @@ go build ./...
 
 - `GET /api/servers`
 - `GET /api/servers/:id`
+- `POST /api/servers`
 - `POST /api/run`
 
 远端命令执行仍按下列约定转发到 remoterun-server：

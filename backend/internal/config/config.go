@@ -12,7 +12,6 @@ type Config struct {
 	Addr              string
 	AllowedOrigin     string
 	CookieSecure      bool
-	DataDir           string
 	DatabaseURL       string
 	SessionName       string
 	SessionSecret     string
@@ -26,7 +25,6 @@ func Load() (Config, error) {
 		Addr:              getEnv("APP_ADDR", ":8080"),
 		AllowedOrigin:     getEnv("ALLOWED_ORIGIN", "http://localhost:5173"),
 		CookieSecure:      getEnvBool("COOKIE_SECURE", false),
-		DataDir:           getEnv("DATA_DIR", "../data"),
 		DatabaseURL:       strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		SessionName:       getEnv("SESSION_NAME", "remoterun_session"),
 		SessionSecret:     strings.TrimSpace(os.Getenv("SESSION_SECRET")),

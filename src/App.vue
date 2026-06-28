@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">RemoteRun</p>
         <h1>服务器命令控制台</h1>
-        <p class="subtitle">通过账号密码登录后，从后端读取服务器配置并安全执行预设命令。</p>
+        <p class="subtitle">通过账号密码登录后，从数据库读取服务器信息并安全执行预设命令。</p>
       </div>
 
       <div class="header-actions">

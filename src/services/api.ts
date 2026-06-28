@@ -1,6 +1,7 @@
 import type {
   ApiError,
   AuthSessionResponse,
+  CreateServerInput,
   RunResponse,
   ServerSummary,
 } from '../types/remoterun'
@@ -96,6 +97,23 @@ export function fetchServers(): Promise<ServerSummary[]> {
 
 export function fetchServerById(serverId: string): Promise<ServerSummary> {
   return requestJson<ServerSummary>(`/api/servers/${encodeURIComponent(serverId)}`)
+}
+
+export function createServer(
+  payload: CreateServerInput,
+  csrfToken: string,
+): Promise<ServerSummary> {
+  return requestJson<ServerSummary>(
+    '/api/servers',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+    { csrfToken },
+  )
 }
 
 export function runCommand(

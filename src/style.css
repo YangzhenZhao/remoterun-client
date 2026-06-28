@@ -28,7 +28,9 @@ body {
 }
 
 button,
-a {
+a,
+input,
+textarea {
   font: inherit;
 }
 
@@ -254,7 +256,10 @@ h3 {
 }
 
 .auth-form,
-.field-group {
+.field-group,
+.server-form,
+.form-grid,
+.command-editor-list {
   display: grid;
   gap: 12px;
 }
@@ -268,6 +273,34 @@ h3 {
   font-size: 0.95rem;
 }
 
+.server-form {
+  margin-top: 24px;
+}
+
+.form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 8px;
+}
+
+.command-editor-list {
+  margin-top: 8px;
+}
+
+.command-editor {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.command-editor-main {
+  min-width: 0;
+}
+
 .text-input {
   width: 100%;
   padding: 12px 14px;
@@ -278,9 +311,25 @@ h3 {
   color: #f8fbff;
 }
 
+.text-area-input {
+  min-height: 88px;
+  resize: vertical;
+}
+
 .text-input:focus {
   outline: 2px solid rgba(56, 189, 248, 0.42);
   outline-offset: 2px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.command-remove-button {
+  white-space: nowrap;
 }
 
 .auth-submit {
@@ -323,6 +372,10 @@ h3 {
   color: #fca5a5;
 }
 
+.success-text {
+  color: #86efac;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     width: min(100vw - 24px, 100%);
@@ -334,7 +387,8 @@ h3 {
   .detail-header,
   .server-card-header,
   .result-summary,
-  .header-actions {
+  .header-actions,
+  .command-editor {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -342,7 +396,8 @@ h3 {
   .header-link,
   .primary-button,
   .secondary-button,
-  .user-pill {
+  .user-pill,
+  .command-remove-button {
     width: 100%;
   }
 }

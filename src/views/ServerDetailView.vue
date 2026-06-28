@@ -4,11 +4,11 @@
       <RouterLink class="secondary-button" to="/servers">返回列表</RouterLink>
 
       <button class="secondary-button" type="button" @click="loadServer" :disabled="loadingServer">
-        {{ loadingServer ? '刷新中...' : '刷新配置' }}
+        {{ loadingServer ? '刷新中...' : '刷新详情' }}
       </button>
     </div>
 
-    <p v-if="loadingServer" class="state-text">正在加载服务器配置...</p>
+    <p v-if="loadingServer" class="state-text">正在加载服务器详情...</p>
     <p v-else-if="errorMessage" class="state-text error-text">{{ errorMessage }}</p>
 
     <template v-else-if="server">
@@ -22,7 +22,7 @@
         </div>
 
         <p class="muted-text">
-          当前页面只展示命令别名；密码保存在本地 `data/{{ server.id }}.json`，不会发送到浏览器。
+          当前页面只展示命令别名；密码和真实命令保存在后端数据库，不会发送到浏览器。
         </p>
       </section>
 
@@ -120,7 +120,7 @@ async function loadServer(): Promise<void> {
     }
 
     server.value = null
-    errorMessage.value = error instanceof Error ? error.message : '读取服务器配置失败'
+    errorMessage.value = error instanceof Error ? error.message : '读取服务器详情失败'
   } finally {
     loadingServer.value = false
   }

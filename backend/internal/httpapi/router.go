@@ -21,7 +21,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"remoterun-backend/internal/config"
-	"remoterun-backend/internal/data"
 	"remoterun-backend/internal/db"
 )
 
@@ -95,6 +94,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	protected.Use(handler.requireAuth())
 	protected.GET("/servers", handler.listServers)
 	protected.GET("/servers/:id", handler.getServer)
+	protected.POST("/servers", handler.requireCSRF(), handler.createServer)
 	protected.POST("/run", handler.requireCSRF(), handler.runCommand)
 
 	return engine
@@ -168,7 +168,8 @@ func (h *Handler) login(c *gin.Context) {
 		return
 	}
 
-	if err := db.CheckPassword(user.PasswordHash, request.Password); err != nil {
+	passwordErr := db.CheckPassword(user.PasswordHash, request.Password)
+	if passwordErr != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "username or password is incorrect"})
 		return
 	}
@@ -218,28 +219,44 @@ func (h *Handler) logout(c *gin.Context) {
 }
 
 func (h *Handler) listServers(c *gin.Context) {
-	servers, err := data.LoadServers(h.config.DataDir)
+	servers, err := db.ListServers(c.Request.Context(), h.db)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	publicServers := make([]data.PublicServer, 0, len(servers))
+	publicServers := make([]db.PublicServer, 0, len(servers))
 	for _, server := range servers {
-		publicServers = append(publicServers, data.ToPublicServer(server))
+		publicServers = append(publicServers, db.ToPublicServer(server))
 	}
 
 	c.JSON(http.StatusOK, publicServers)
 }
 
 func (h *Handler) getServer(c *gin.Context) {
-	server, err := data.FindServerByID(h.config.DataDir, c.Param("id"))
+	server, err := db.FindServerByID(c.Request.Context(), h.db, c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, data.ToPublicServer(server))
+	c.JSON(http.StatusOK, db.ToPublicServer(server))
+}
+
+func (h *Handler) createServer(c *gin.Context) {
+	var request db.CreateServerInput
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid server payload"})
+		return
+	}
+
+	server, err := db.CreateServer(c.Request.Context(), h.db, request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, db.ToPublicServer(server))
 }
 
 func (h *Handler) runCommand(c *gin.Context) {
@@ -249,13 +266,13 @@ func (h *Handler) runCommand(c *gin.Context) {
 		return
 	}
 
-	server, err := data.FindServerByID(h.config.DataDir, strings.TrimSpace(request.ServerID))
+	server, err := db.FindServerByID(c.Request.Context(), h.db, strings.TrimSpace(request.ServerID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
 	}
 
-	var commandToRun *data.CommandConfig
+	var commandToRun *db.CommandConfig
 	for i := range server.Commands {
 		if server.Commands[i].Alias == strings.TrimSpace(request.CommandAlias) {
 			commandToRun = &server.Commands[i]
