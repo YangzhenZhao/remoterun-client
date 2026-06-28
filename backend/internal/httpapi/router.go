@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gin-contrib/cors"
@@ -224,7 +225,13 @@ func (h *Handler) logout(c *gin.Context) {
 }
 
 func (h *Handler) listServers(c *gin.Context) {
-	servers, err := db.ListServers(c.Request.Context(), h.db)
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	servers, err := db.ListServers(c.Request.Context(), h.db, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -239,7 +246,13 @@ func (h *Handler) listServers(c *gin.Context) {
 }
 
 func (h *Handler) getServer(c *gin.Context) {
-	server, err := db.FindServerByID(c.Request.Context(), h.db, c.Param("id"))
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	server, err := db.FindServerByID(c.Request.Context(), h.db, c.Param("id"), userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
@@ -249,13 +262,19 @@ func (h *Handler) getServer(c *gin.Context) {
 }
 
 func (h *Handler) createServer(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
 	var request db.CreateServerInput
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid server payload"})
 		return
 	}
 
-	server, err := db.CreateServer(c.Request.Context(), h.db, request)
+	server, err := db.CreateServer(c.Request.Context(), h.db, userID, request)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -265,13 +284,19 @@ func (h *Handler) createServer(c *gin.Context) {
 }
 
 func (h *Handler) createCommand(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
 	var request createCommandRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid command payload"})
 		return
 	}
 
-	server, err := db.AddCommandToServer(c.Request.Context(), h.db, c.Param("id"), db.CreateCommandInput{
+	server, err := db.AddCommandToServer(c.Request.Context(), h.db, c.Param("id"), userID, db.CreateCommandInput{
 		Alias:   request.Alias,
 		Command: request.Command,
 	})
@@ -289,13 +314,19 @@ func (h *Handler) createCommand(c *gin.Context) {
 }
 
 func (h *Handler) runCommand(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
 	var request runCommandRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run payload"})
 		return
 	}
 
-	server, err := db.FindServerByID(c.Request.Context(), h.db, strings.TrimSpace(request.ServerID))
+	server, err := db.FindServerByID(c.Request.Context(), h.db, strings.TrimSpace(request.ServerID), userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
@@ -416,6 +447,20 @@ func stringValue(value any) string {
 	}
 
 	return text
+}
+
+func currentUserID(c *gin.Context) (int64, bool) {
+	user := sessionUser(sessions.Default(c))
+	if user == nil {
+		return 0, false
+	}
+
+	userID, err := strconv.ParseInt(strings.TrimSpace(user.ID), 10, 64)
+	if err != nil || userID < 1 {
+		return 0, false
+	}
+
+	return userID, true
 }
 
 func sameOrigin(left string, right string) bool {

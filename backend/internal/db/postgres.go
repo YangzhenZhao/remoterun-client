@@ -35,6 +35,7 @@ type CommandConfig struct {
 
 type ServerConfig struct {
 	ID       int64
+	UserID   int64
 	Alias    string
 	Host     string
 	Port     int
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS servers (
   id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
   alias TEXT NOT NULL,
   host TEXT NOT NULL,
   port INTEGER NOT NULL,
@@ -106,7 +108,10 @@ CREATE TABLE IF NOT EXISTS server_commands (
   command TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);`
+);
+
+ALTER TABLE servers
+ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE CASCADE;`
 
 	if _, err := pool.Exec(ctx, statement); err != nil {
 		return fmt.Errorf("migrate database tables: %w", err)
@@ -193,10 +198,11 @@ WHERE username = $1`
 	return user, nil
 }
 
-func ListServers(ctx context.Context, pool *pgxpool.Pool) ([]ServerConfig, error) {
+func ListServers(ctx context.Context, pool *pgxpool.Pool, userID int64) ([]ServerConfig, error) {
 	const statement = `
 SELECT
   s.id,
+  s.user_id,
   s.alias,
   s.host,
   s.port,
@@ -205,9 +211,10 @@ SELECT
   c.command
 FROM servers s
 LEFT JOIN server_commands c ON c.server_id = s.id
+WHERE s.user_id = $1
 ORDER BY s.alias ASC, s.id ASC, c.position ASC, c.id ASC`
 
-	rows, err := pool.Query(ctx, statement)
+	rows, err := pool.Query(ctx, statement, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query servers: %w", err)
 	}
@@ -221,7 +228,7 @@ ORDER BY s.alias ASC, s.id ASC, c.position ASC, c.id ASC`
 	return servers, nil
 }
 
-func FindServerByID(ctx context.Context, pool *pgxpool.Pool, serverID string) (ServerConfig, error) {
+func FindServerByID(ctx context.Context, pool *pgxpool.Pool, serverID string, userID int64) (ServerConfig, error) {
 	parsedID, err := ParseServerID(serverID)
 	if err != nil {
 		return ServerConfig{}, err
@@ -230,6 +237,7 @@ func FindServerByID(ctx context.Context, pool *pgxpool.Pool, serverID string) (S
 	const statement = `
 SELECT
   s.id,
+  s.user_id,
   s.alias,
   s.host,
   s.port,
@@ -238,10 +246,10 @@ SELECT
   c.command
 FROM servers s
 LEFT JOIN server_commands c ON c.server_id = s.id
-WHERE s.id = $1
+WHERE s.id = $1 AND s.user_id = $2
 ORDER BY c.position ASC, c.id ASC`
 
-	rows, err := pool.Query(ctx, statement, parsedID)
+	rows, err := pool.Query(ctx, statement, parsedID, userID)
 	if err != nil {
 		return ServerConfig{}, fmt.Errorf("query server: %w", err)
 	}
@@ -259,7 +267,7 @@ ORDER BY c.position ASC, c.id ASC`
 	return servers[0], nil
 }
 
-func CreateServer(ctx context.Context, pool *pgxpool.Pool, input CreateServerInput) (ServerConfig, error) {
+func CreateServer(ctx context.Context, pool *pgxpool.Pool, userID int64, input CreateServerInput) (ServerConfig, error) {
 	normalized, err := NormalizeCreateServerInput(input)
 	if err != nil {
 		return ServerConfig{}, err
@@ -278,12 +286,12 @@ func CreateServer(ctx context.Context, pool *pgxpool.Pool, input CreateServerInp
 	}()
 
 	const insertServer = `
-INSERT INTO servers (alias, host, port, password)
-VALUES ($1, $2, $3, $4)
+INSERT INTO servers (user_id, alias, host, port, password)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id`
 
 	var serverID int64
-	if err := tx.QueryRow(ctx, insertServer, normalized.Alias, normalized.Host, normalized.Port, normalized.Password).Scan(&serverID); err != nil {
+	if err := tx.QueryRow(ctx, insertServer, userID, normalized.Alias, normalized.Host, normalized.Port, normalized.Password).Scan(&serverID); err != nil {
 		return ServerConfig{}, fmt.Errorf("insert server: %w", err)
 	}
 
@@ -304,6 +312,7 @@ VALUES ($1, $2, $3, $4)`
 
 	return ServerConfig{
 		ID:       serverID,
+		UserID:   userID,
 		Alias:    normalized.Alias,
 		Host:     normalized.Host,
 		Port:     normalized.Port,
@@ -312,7 +321,7 @@ VALUES ($1, $2, $3, $4)`
 	}, nil
 }
 
-func AddCommandToServer(ctx context.Context, pool *pgxpool.Pool, serverID string, input CreateCommandInput) (ServerConfig, error) {
+func AddCommandToServer(ctx context.Context, pool *pgxpool.Pool, serverID string, userID int64, input CreateCommandInput) (ServerConfig, error) {
 	parsedID, err := ParseServerID(serverID)
 	if err != nil {
 		return ServerConfig{}, err
@@ -338,11 +347,11 @@ func AddCommandToServer(ctx context.Context, pool *pgxpool.Pool, serverID string
 	const lockServer = `
 SELECT id
 FROM servers
-WHERE id = $1
+WHERE id = $1 AND user_id = $2
 FOR UPDATE`
 
 	var lockedServerID int64
-	if err := tx.QueryRow(ctx, lockServer, parsedID).Scan(&lockedServerID); err != nil {
+	if err := tx.QueryRow(ctx, lockServer, parsedID, userID).Scan(&lockedServerID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ServerConfig{}, ErrServerNotFound
 		}
@@ -373,7 +382,7 @@ VALUES ($1, $2, $3, $4)`
 	}
 	committed = true
 
-	return FindServerByID(ctx, pool, strconv.FormatInt(parsedID, 10))
+	return FindServerByID(ctx, pool, strconv.FormatInt(parsedID, 10), userID)
 }
 
 func NormalizeCreateServerInput(input CreateServerInput) (CreateServerInput, error) {
@@ -470,6 +479,7 @@ func collectServers(rows pgx.Rows) ([]ServerConfig, error) {
 	for rows.Next() {
 		var (
 			serverID       int64
+			serverUserID   *int64
 			serverAlias    string
 			serverHost     string
 			serverPort     int
@@ -478,7 +488,7 @@ func collectServers(rows pgx.Rows) ([]ServerConfig, error) {
 			commandBody    *string
 		)
 
-		if err := rows.Scan(&serverID, &serverAlias, &serverHost, &serverPort, &serverPassword, &commandAlias, &commandBody); err != nil {
+		if err := rows.Scan(&serverID, &serverUserID, &serverAlias, &serverHost, &serverPort, &serverPassword, &commandAlias, &commandBody); err != nil {
 			return nil, fmt.Errorf("scan server row: %w", err)
 		}
 
@@ -486,8 +496,13 @@ func collectServers(rows pgx.Rows) ([]ServerConfig, error) {
 		if !exists {
 			serverIndex = len(servers)
 			indexByID[serverID] = serverIndex
+			var ownerID int64
+			if serverUserID != nil {
+				ownerID = *serverUserID
+			}
 			servers = append(servers, ServerConfig{
 				ID:       serverID,
+				UserID:   ownerID,
 				Alias:    serverAlias,
 				Host:     serverHost,
 				Port:     serverPort,
