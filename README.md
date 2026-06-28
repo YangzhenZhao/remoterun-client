@@ -23,9 +23,102 @@
 ```text
 .
 ├── backend/        # Gin + PostgreSQL 后端
+├── nginx/          # Docker 部署时的前端反向代理配置
 ├── data/           # 服务器 JSON 配置
 └── src/            # Vue 前端
 ```
+
+## Docker 一键部署
+
+适合直接启动完整环境，包括：
+
+- `frontend`：构建后的 Vue 静态站点，由 `nginx` 提供服务
+- `backend`：Go API 服务
+- `db`：PostgreSQL
+
+先复制 Docker 环境变量模板：
+
+```bash
+cp .env.example .env
+```
+
+按需修改根目录 `.env`，至少建议替换：
+
+```bash
+SESSION_SECRET=change-this-session-secret-please-32chars
+ADMIN_PASSWORD=change-this-password
+APP_ORIGIN=http://localhost:8081
+FRONTEND_PORT=8081
+```
+
+启动完整环境：
+
+```bash
+# Docker Compose V2
+docker compose up -d --build
+
+# 如果你的环境只支持旧版命令
+docker-compose up -d --build
+```
+
+访问地址：
+
+- 前端：`http://localhost:8081`
+- 后端 API：由前端同源反代到 `/api`
+
+常用命令：
+
+```bash
+# 查看日志
+docker compose logs -f
+docker-compose logs -f
+
+# 停止服务
+docker compose down
+docker-compose down
+
+# 连数据库数据一起清理
+docker compose down -v
+docker-compose down -v
+```
+
+说明：
+
+- `data/` 会挂载到后端容器中的 `/app/data`
+- 首次启动会自动初始化数据库，并根据 `.env` 中的 `ADMIN_USERNAME / ADMIN_PASSWORD` 创建或更新管理员账号
+- 生产环境建议将 `COOKIE_SECURE=true`，并把 `APP_ORIGIN` 改成真实 HTTPS 域名
+
+## Docker 本地测试
+
+如果你想在容器里跑开发环境，使用下面的开发编排：
+
+```bash
+cp .env.example .env
+
+# Docker Compose V2
+docker compose -f docker-compose.dev.yml up --build
+
+# 如果你的环境只支持旧版命令
+docker-compose -f docker-compose.dev.yml up --build
+```
+
+如果出现 `unknown shorthand flag: 'f' in -f` 这类报错，通常表示当前 Docker 环境没有启用 Compose V2，请改用 `docker-compose`。
+
+访问地址：
+
+- 前端开发服务器：`http://localhost:5173`
+- 后端 API：`http://localhost:8080`
+- PostgreSQL：`localhost:5432`
+
+这一模式下：
+
+- 前端运行 `Vite` 开发服务器
+- 后端运行 `go run ./cmd/server`
+- 项目源码以卷挂载到容器，适合本地联调和接口测试
+
+## 非 Docker 启动
+
+如果你不使用 Docker，仍然可以按下面方式分别启动前后端。
 
 ## 数据目录格式
 
@@ -73,7 +166,7 @@ cd backend
 cp .env.example .env
 ```
 
-按你的环境修改 `.env`，关键变量如下：
+按你的环境修改 `backend/.env`，关键变量如下：
 
 ```bash
 APP_ADDR=:8080
@@ -166,3 +259,27 @@ go build ./...
 - 后端校验 `Origin`
 - 前端不使用 `v-html`，渲染走 Vue 默认转义，降低 XSS 风险
 - 后端统一返回安全响应头，降低点击劫持和内容嗅探风险
+
+### 国内镜像使用
+
+修改 ~/.colima/default/colima.yaml
+
+```yaml
+network:
+  address: false
+  mode: shared
+  interface: en0
+  preferredRoute: false
+  dns:
+    - 223.5.5.5
+    - 119.29.29.29
+  dnsHosts: {}
+  hostAddresses: false
+  gatewayAddress: 192.168.5.2
+
+docker:
+  registry-mirrors:
+    - https://docker.m.daocloud.io
+    - https://mirror.ccs.tencentyun.com
+    - https://hub-mirror.c.163.com
+```
