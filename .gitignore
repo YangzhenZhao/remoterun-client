@@ -4,3 +4,4 @@ dist
 *.local
 data/*.json
 !data/sample.json
+.env
