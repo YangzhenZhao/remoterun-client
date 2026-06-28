@@ -18,6 +18,17 @@ export interface RunResponse {
   combined_log: string
 }
 
+export interface AuthUser {
+  id: string
+  username: string
+}
+
+export interface AuthSessionResponse {
+  authenticated: boolean
+  user?: AuthUser
+  csrfToken?: string
+}
+
 export interface ApiError {
   error: string
 }

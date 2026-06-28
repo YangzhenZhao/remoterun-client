@@ -80,12 +80,15 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { fetchServerById, runCommand } from '../services/api'
+import { RequestError, fetchServerById, runCommand } from '../services/api'
+import { clearAuthState, useAuthStore } from '../stores/auth'
 import type { RunResponse, ServerSummary } from '../types/remoterun'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 
 const server = ref<ServerSummary | null>(null)
 const loadingServer = ref(false)
@@ -110,6 +113,12 @@ async function loadServer(): Promise<void> {
   try {
     server.value = await fetchServerById(serverId)
   } catch (error) {
+    if (error instanceof RequestError && error.status === 401) {
+      clearAuthState()
+      await router.replace('/login')
+      return
+    }
+
     server.value = null
     errorMessage.value = error instanceof Error ? error.message : '读取服务器配置失败'
   } finally {
@@ -128,8 +137,14 @@ async function executeCommand(commandAlias: string): Promise<void> {
   runResult.value = null
 
   try {
-    runResult.value = await runCommand(server.value.id, commandAlias)
+    runResult.value = await runCommand(server.value.id, commandAlias, auth.state.csrfToken)
   } catch (error) {
+    if (error instanceof RequestError && error.status === 401) {
+      clearAuthState()
+      await router.replace('/login')
+      return
+    }
+
     runErrorMessage.value = error instanceof Error ? error.message : '执行命令失败'
   } finally {
     runningAlias.value = ''

@@ -68,7 +68,8 @@ pre {
 .panel-header,
 .detail-header,
 .server-card-header,
-.result-summary {
+.result-summary,
+.header-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -136,7 +137,8 @@ h3 {
 .header-link,
 .primary-button,
 .secondary-button,
-.command-item {
+.command-item,
+.text-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -158,6 +160,19 @@ h3 {
 .primary-button {
   background: linear-gradient(135deg, #2563eb, #0284c7);
   color: #f8fbff;
+}
+
+.header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.user-pill {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #bae6fd;
 }
 
 .secondary-button {
@@ -229,6 +244,50 @@ h3 {
   border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
+.auth-layout {
+  display: flex;
+  justify-content: center;
+}
+
+.auth-panel {
+  width: min(480px, 100%);
+}
+
+.auth-form,
+.field-group {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form {
+  margin-top: 24px;
+}
+
+.field-group span {
+  color: #dbeafe;
+  font-size: 0.95rem;
+}
+
+.text-input {
+  width: 100%;
+  padding: 12px 14px;
+  justify-content: flex-start;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.72);
+  color: #f8fbff;
+}
+
+.text-input:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.42);
+  outline-offset: 2px;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
 .result-summary {
   margin-bottom: 16px;
 }
@@ -274,14 +333,16 @@ h3 {
   .panel-header,
   .detail-header,
   .server-card-header,
-  .result-summary {
+  .result-summary,
+  .header-actions {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .header-link,
   .primary-button,
-  .secondary-button {
+  .secondary-button,
+  .user-pill {
     width: 100%;
   }
 }

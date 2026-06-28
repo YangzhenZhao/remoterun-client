@@ -38,10 +38,13 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
-import { fetchServers } from '../services/api'
+import { RequestError, fetchServers } from '../services/api'
+import { clearAuthState } from '../stores/auth'
 import type { ServerSummary } from '../types/remoterun'
+
+const router = useRouter()
 
 const servers = ref<ServerSummary[]>([])
 const loading = ref(false)
@@ -54,6 +57,12 @@ async function loadServers(): Promise<void> {
   try {
     servers.value = await fetchServers()
   } catch (error) {
+    if (error instanceof RequestError && error.status === 401) {
+      clearAuthState()
+      await router.replace('/login')
+      return
+    }
+
     errorMessage.value = error instanceof Error ? error.message : '读取服务器配置失败'
   } finally {
     loading.value = false
