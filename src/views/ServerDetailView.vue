@@ -29,14 +29,48 @@
       <section class="panel">
         <div class="panel-header">
           <div>
+            <p class="section-label">Commands</p>
+            <h2>预设命令</h2>
+          </div>
+        </div>
+
+        <p v-if="server.commands.length === 0" class="state-text">该服务器没有配置任何命令。</p>
+
+        <div v-else class="command-list">
+          <button
+            v-for="command in server.commands"
+            :key="command.alias"
+            class="command-item"
+            type="button"
+            :disabled="runningAlias === command.alias"
+            @click="executeCommand(command.alias)"
+          >
+            <span>{{ command.alias }}</span>
+            <span>{{ runningAlias === command.alias ? '执行中...' : '运行命令' }}</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
             <p class="section-label">Create</p>
             <h2>添加命令</h2>
           </div>
         </div>
 
-        <p class="muted-text">新增后会立即保存到数据库，并出现在下方命令列表中。</p>
+        <p class="muted-text">点击按钮后填写表单，保存成功后会刷新页面并显示最新命令。</p>
 
-        <form class="server-form" @submit.prevent="submitCreateCommand">
+        <button
+          v-if="!showCreateCommandForm"
+          class="primary-button"
+          type="button"
+          @click="showCreateCommandForm = true"
+        >
+          添加命令
+        </button>
+
+        <form v-else class="server-form" @submit.prevent="submitCreateCommand">
           <div class="form-grid">
             <label class="field-group">
               <span>命令别名</span>
@@ -60,43 +94,22 @@
             </label>
           </div>
 
-          <p v-if="createCommandSuccessMessage" class="state-text success-text">{{ createCommandSuccessMessage }}</p>
           <p v-if="createCommandErrorMessage" class="state-text error-text">{{ createCommandErrorMessage }}</p>
 
           <div class="form-actions">
             <button class="primary-button" type="submit" :disabled="creatingCommand">
               {{ creatingCommand ? '保存中...' : '保存命令' }}
             </button>
-            <button class="secondary-button" type="button" @click="resetCreateCommandForm" :disabled="creatingCommand">
-              重置
+            <button
+              class="secondary-button"
+              type="button"
+              @click="cancelCreateCommand"
+              :disabled="creatingCommand"
+            >
+              取消
             </button>
           </div>
         </form>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="section-label">Commands</p>
-            <h2>预设命令</h2>
-          </div>
-        </div>
-
-        <p v-if="server.commands.length === 0" class="state-text">该服务器没有配置任何命令。</p>
-
-        <div v-else class="command-list">
-          <button
-            v-for="command in server.commands"
-            :key="command.alias"
-            class="command-item"
-            type="button"
-            :disabled="runningAlias === command.alias"
-            @click="executeCommand(command.alias)"
-          >
-            <span>{{ command.alias }}</span>
-            <span>{{ runningAlias === command.alias ? '执行中...' : '运行命令' }}</span>
-          </button>
-        </div>
       </section>
 
       <section class="panel">
@@ -147,7 +160,7 @@ const runErrorMessage = ref('')
 const runResult = ref<RunResponse | null>(null)
 const creatingCommand = ref(false)
 const createCommandErrorMessage = ref('')
-const createCommandSuccessMessage = ref('')
+const showCreateCommandForm = ref(false)
 
 const createCommandForm = reactive<CommandInput>({
   alias: '',
@@ -158,7 +171,11 @@ function resetCreateCommandForm(): void {
   createCommandForm.alias = ''
   createCommandForm.command = ''
   createCommandErrorMessage.value = ''
-  createCommandSuccessMessage.value = ''
+}
+
+function cancelCreateCommand(): void {
+  resetCreateCommandForm()
+  showCreateCommandForm.value = false
 }
 
 async function handleUnauthorized(): Promise<void> {
@@ -200,22 +217,20 @@ async function submitCreateCommand(): Promise<void> {
 
   creatingCommand.value = true
   createCommandErrorMessage.value = ''
-  createCommandSuccessMessage.value = ''
 
   try {
-    const commandAlias = createCommandForm.alias.trim()
-    const updatedServer = await createCommand(
+    await createCommand(
       server.value.id,
       {
-        alias: commandAlias,
+        alias: createCommandForm.alias.trim(),
         command: createCommandForm.command.trim(),
       },
       auth.state.csrfToken,
     )
 
-    server.value = updatedServer
-    resetCreateCommandForm()
-    createCommandSuccessMessage.value = `已添加命令：${commandAlias}`
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
   } catch (error) {
     if (error instanceof RequestError && error.status === 401) {
       await handleUnauthorized()
@@ -255,8 +270,7 @@ async function executeCommand(commandAlias: string): Promise<void> {
 watch(
   () => route.params.id,
   () => {
-    resetCreateCommandForm()
-    createCommandSuccessMessage.value = ''
+    cancelCreateCommand()
     runErrorMessage.value = ''
     runResult.value = null
     lastCommandAlias.value = ''
