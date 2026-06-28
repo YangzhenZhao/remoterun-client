@@ -116,6 +116,24 @@ export function createServer(
   )
 }
 
+export function createCommand(
+  serverId: string,
+  payload: { alias: string; command: string },
+  csrfToken: string,
+): Promise<ServerSummary> {
+  return requestJson<ServerSummary>(
+    `/api/servers/${encodeURIComponent(serverId)}/commands`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+    { csrfToken },
+  )
+}
+
 export function runCommand(
   serverId: string,
   commandAlias: string,

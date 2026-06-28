@@ -57,6 +57,11 @@ type runCommandRequest struct {
 	CommandAlias string `json:"commandAlias"`
 }
 
+type createCommandRequest struct {
+	Alias   string `json:"alias"`
+	Command string `json:"command"`
+}
+
 func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Logger(), gin.Recovery())
@@ -95,6 +100,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	protected.GET("/servers", handler.listServers)
 	protected.GET("/servers/:id", handler.getServer)
 	protected.POST("/servers", handler.requireCSRF(), handler.createServer)
+	protected.POST("/servers/:id/commands", handler.requireCSRF(), handler.createCommand)
 	protected.POST("/run", handler.requireCSRF(), handler.runCommand)
 
 	return engine
@@ -252,6 +258,30 @@ func (h *Handler) createServer(c *gin.Context) {
 
 	server, err := db.CreateServer(c.Request.Context(), h.db, request)
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, db.ToPublicServer(server))
+}
+
+func (h *Handler) createCommand(c *gin.Context) {
+	var request createCommandRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid command payload"})
+		return
+	}
+
+	server, err := db.AddCommandToServer(c.Request.Context(), h.db, c.Param("id"), db.CreateCommandInput{
+		Alias:   request.Alias,
+		Command: request.Command,
+	})
+	if err != nil {
+		if errors.Is(err, db.ErrServerNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

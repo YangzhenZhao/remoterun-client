@@ -29,6 +29,54 @@
       <section class="panel">
         <div class="panel-header">
           <div>
+            <p class="section-label">Create</p>
+            <h2>添加命令</h2>
+          </div>
+        </div>
+
+        <p class="muted-text">新增后会立即保存到数据库，并出现在下方命令列表中。</p>
+
+        <form class="server-form" @submit.prevent="submitCreateCommand">
+          <div class="form-grid">
+            <label class="field-group">
+              <span>命令别名</span>
+              <input
+                v-model.trim="createCommandForm.alias"
+                class="text-input"
+                type="text"
+                maxlength="120"
+                placeholder="例如：重启服务"
+              />
+            </label>
+
+            <label class="field-group">
+              <span>命令内容</span>
+              <textarea
+                v-model.trim="createCommandForm.command"
+                class="text-input text-area-input"
+                rows="3"
+                placeholder="例如：systemctl restart my-app"
+              />
+            </label>
+          </div>
+
+          <p v-if="createCommandSuccessMessage" class="state-text success-text">{{ createCommandSuccessMessage }}</p>
+          <p v-if="createCommandErrorMessage" class="state-text error-text">{{ createCommandErrorMessage }}</p>
+
+          <div class="form-actions">
+            <button class="primary-button" type="submit" :disabled="creatingCommand">
+              {{ creatingCommand ? '保存中...' : '保存命令' }}
+            </button>
+            <button class="secondary-button" type="button" @click="resetCreateCommandForm" :disabled="creatingCommand">
+              重置
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
             <p class="section-label">Commands</p>
             <h2>预设命令</h2>
           </div>
@@ -79,12 +127,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { RequestError, fetchServerById, runCommand } from '../services/api'
+import { RequestError, createCommand, fetchServerById, runCommand } from '../services/api'
 import { clearAuthState, useAuthStore } from '../stores/auth'
-import type { RunResponse, ServerSummary } from '../types/remoterun'
+import type { CommandInput, RunResponse, ServerSummary } from '../types/remoterun'
 
 const route = useRoute()
 const router = useRouter()
@@ -97,6 +145,26 @@ const runningAlias = ref('')
 const lastCommandAlias = ref('')
 const runErrorMessage = ref('')
 const runResult = ref<RunResponse | null>(null)
+const creatingCommand = ref(false)
+const createCommandErrorMessage = ref('')
+const createCommandSuccessMessage = ref('')
+
+const createCommandForm = reactive<CommandInput>({
+  alias: '',
+  command: '',
+})
+
+function resetCreateCommandForm(): void {
+  createCommandForm.alias = ''
+  createCommandForm.command = ''
+  createCommandErrorMessage.value = ''
+  createCommandSuccessMessage.value = ''
+}
+
+async function handleUnauthorized(): Promise<void> {
+  clearAuthState()
+  await router.replace('/login')
+}
 
 async function loadServer(): Promise<void> {
   const serverId = String(route.params.id ?? '')
@@ -114,8 +182,7 @@ async function loadServer(): Promise<void> {
     server.value = await fetchServerById(serverId)
   } catch (error) {
     if (error instanceof RequestError && error.status === 401) {
-      clearAuthState()
-      await router.replace('/login')
+      await handleUnauthorized()
       return
     }
 
@@ -123,6 +190,41 @@ async function loadServer(): Promise<void> {
     errorMessage.value = error instanceof Error ? error.message : '读取服务器详情失败'
   } finally {
     loadingServer.value = false
+  }
+}
+
+async function submitCreateCommand(): Promise<void> {
+  if (!server.value) {
+    return
+  }
+
+  creatingCommand.value = true
+  createCommandErrorMessage.value = ''
+  createCommandSuccessMessage.value = ''
+
+  try {
+    const commandAlias = createCommandForm.alias.trim()
+    const updatedServer = await createCommand(
+      server.value.id,
+      {
+        alias: commandAlias,
+        command: createCommandForm.command.trim(),
+      },
+      auth.state.csrfToken,
+    )
+
+    server.value = updatedServer
+    resetCreateCommandForm()
+    createCommandSuccessMessage.value = `已添加命令：${commandAlias}`
+  } catch (error) {
+    if (error instanceof RequestError && error.status === 401) {
+      await handleUnauthorized()
+      return
+    }
+
+    createCommandErrorMessage.value = error instanceof Error ? error.message : '保存命令失败'
+  } finally {
+    creatingCommand.value = false
   }
 }
 
@@ -140,8 +242,7 @@ async function executeCommand(commandAlias: string): Promise<void> {
     runResult.value = await runCommand(server.value.id, commandAlias, auth.state.csrfToken)
   } catch (error) {
     if (error instanceof RequestError && error.status === 401) {
-      clearAuthState()
-      await router.replace('/login')
+      await handleUnauthorized()
       return
     }
 
@@ -154,6 +255,8 @@ async function executeCommand(commandAlias: string): Promise<void> {
 watch(
   () => route.params.id,
   () => {
+    resetCreateCommandForm()
+    createCommandSuccessMessage.value = ''
     runErrorMessage.value = ''
     runResult.value = null
     lastCommandAlias.value = ''

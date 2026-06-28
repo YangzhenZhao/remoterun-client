@@ -100,6 +100,12 @@ docker compose -f docker-compose.dev.yml up --build
 docker-compose -f docker-compose.dev.yml up -d --build 
 ```
 
+停止:  
+
+```bash
+docker-compose -f docker-compose.dev.yml down
+```
+
 如果出现 `unknown shorthand flag: 'f' in -f` 这类报错，通常表示当前 Docker 环境没有启用 Compose V2，请改用 `docker-compose`。
 
 访问地址：

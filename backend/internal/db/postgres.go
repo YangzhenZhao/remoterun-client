@@ -276,6 +276,70 @@ VALUES ($1, $2, $3, $4)`
 	}, nil
 }
 
+func AddCommandToServer(ctx context.Context, pool *pgxpool.Pool, serverID string, input CreateCommandInput) (ServerConfig, error) {
+	parsedID, err := ParseServerID(serverID)
+	if err != nil {
+		return ServerConfig{}, err
+	}
+
+	normalized, err := NormalizeCreateCommandInput(input)
+	if err != nil {
+		return ServerConfig{}, err
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return ServerConfig{}, fmt.Errorf("begin transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	const lockServer = `
+SELECT id
+FROM servers
+WHERE id = $1
+FOR UPDATE`
+
+	var lockedServerID int64
+	if err := tx.QueryRow(ctx, lockServer, parsedID).Scan(&lockedServerID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ServerConfig{}, ErrServerNotFound
+		}
+
+		return ServerConfig{}, fmt.Errorf("lock server: %w", err)
+	}
+
+	const nextPositionQuery = `
+SELECT COALESCE(MAX(position), -1) + 1
+FROM server_commands
+WHERE server_id = $1`
+
+	var position int
+	if err := tx.QueryRow(ctx, nextPositionQuery, parsedID).Scan(&position); err != nil {
+		return ServerConfig{}, fmt.Errorf("query next command position: %w", err)
+	}
+
+	const insertCommand = `
+INSERT INTO server_commands (server_id, alias, command, position)
+VALUES ($1, $2, $3, $4)`
+
+	if _, err := tx.Exec(ctx, insertCommand, parsedID, normalized.Alias, normalized.Command, position); err != nil {
+		return ServerConfig{}, fmt.Errorf("insert command: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return ServerConfig{}, fmt.Errorf("commit transaction: %w", err)
+	}
+	committed = true
+
+	return FindServerByID(ctx, pool, strconv.FormatInt(parsedID, 10))
+}
+
 func NormalizeCreateServerInput(input CreateServerInput) (CreateServerInput, error) {
 	input.Alias = strings.TrimSpace(input.Alias)
 	input.Host = strings.TrimSpace(input.Host)
@@ -305,27 +369,37 @@ func NormalizeCreateServerInput(input CreateServerInput) (CreateServerInput, err
 
 	commands := make([]CreateCommandInput, 0, len(input.Commands))
 	for _, command := range input.Commands {
-		normalizedCommand := CreateCommandInput{
-			Alias:   strings.TrimSpace(command.Alias),
-			Command: strings.TrimSpace(command.Command),
+		normalizedCommand, err := NormalizeCreateCommandInput(command)
+		if err != nil {
+			return CreateServerInput{}, err
 		}
 		if normalizedCommand.Alias == "" && normalizedCommand.Command == "" {
 			continue
 		}
-		if normalizedCommand.Alias == "" {
-			return CreateServerInput{}, fmt.Errorf("command alias is required")
-		}
-		if len(normalizedCommand.Alias) > 120 {
-			return CreateServerInput{}, fmt.Errorf("command alias is too long")
-		}
-		if normalizedCommand.Command == "" {
-			return CreateServerInput{}, fmt.Errorf("command content is required")
-		}
-
 		commands = append(commands, normalizedCommand)
 	}
 
 	input.Commands = commands
+	return input, nil
+}
+
+func NormalizeCreateCommandInput(input CreateCommandInput) (CreateCommandInput, error) {
+	input.Alias = strings.TrimSpace(input.Alias)
+	input.Command = strings.TrimSpace(input.Command)
+
+	if input.Alias == "" && input.Command == "" {
+		return input, nil
+	}
+	if input.Alias == "" {
+		return CreateCommandInput{}, fmt.Errorf("command alias is required")
+	}
+	if len(input.Alias) > 120 {
+		return CreateCommandInput{}, fmt.Errorf("command alias is too long")
+	}
+	if input.Command == "" {
+		return CreateCommandInput{}, fmt.Errorf("command content is required")
+	}
+
 	return input, nil
 }
 

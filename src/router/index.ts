@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '../stores/auth'
 import LoginView from '../views/LoginView.vue'
+import ServerCreateView from '../views/ServerCreateView.vue'
 import ServerDetailView from '../views/ServerDetailView.vue'
 import ServerListView from '../views/ServerListView.vue'
 
@@ -24,6 +25,14 @@ const router = createRouter({
       path: '/servers',
       name: 'servers',
       component: ServerListView,
+      meta: {
+        requiresAuth: true,
+      },
+    },
+    {
+      path: '/servers/new',
+      name: 'server-create',
+      component: ServerCreateView,
       meta: {
         requiresAuth: true,
       },
