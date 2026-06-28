@@ -48,6 +48,13 @@ SESSION_SECRET=change-this-session-secret-please-32chars
 ADMIN_PASSWORD=change-this-password
 APP_ORIGIN=http://localhost:8081
 FRONTEND_PORT=8081
+GOPROXY=https://goproxy.cn,direct
+```
+
+如果生产环境访问 `proxy.golang.org` 不稳定，可按实际网络情况调整 `GOPROXY`，例如：
+
+```bash
+GOPROXY=https://goproxy.cn,direct
 ```
 
 启动完整环境：
@@ -85,6 +92,7 @@ docker-compose down -v
 
 - 首次启动会自动初始化数据库，并根据 `.env` 中的 `ADMIN_USERNAME / ADMIN_PASSWORD` 创建或更新管理员账号
 - 生产环境建议将 `COOKIE_SECURE=true`，并把 `APP_ORIGIN` 改成真实 HTTPS 域名
+- 后端镜像构建会读取根目录 `.env` 里的 `GOPROXY` 作为 `go mod download` 的模块代理
 
 ## Docker 本地测试
 
