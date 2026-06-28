@@ -78,6 +78,19 @@ export function login(username: string, password: string): Promise<AuthSessionRe
   })
 }
 
+export function register(username: string, password: string): Promise<AuthSessionResponse> {
+  return requestJson<AuthSessionResponse>('/api/auth/register', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username,
+      password,
+    }),
+  })
+}
+
 export function logout(csrfToken: string): Promise<{ ok: boolean }> {
   return requestJson<{ ok: boolean }>(
     '/api/auth/logout',

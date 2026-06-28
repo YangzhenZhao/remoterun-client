@@ -4,6 +4,7 @@ import {
   AUTH_UNAUTHORIZED_EVENT,
   fetchSession,
   login as loginRequest,
+  register as registerRequest,
   logout as logoutRequest,
 } from '../services/api'
 import type { AuthSessionResponse, AuthUser } from '../types/remoterun'
@@ -71,6 +72,16 @@ export async function login(username: string, password: string): Promise<void> {
   }
 }
 
+export async function register(username: string, password: string): Promise<void> {
+  state.loading = true
+  try {
+    const payload = await registerRequest(username, password)
+    applySession(payload)
+  } finally {
+    state.loading = false
+  }
+}
+
 export async function logout(): Promise<void> {
   state.loading = true
   try {
@@ -95,6 +106,7 @@ export function useAuthStore() {
     clearAuthState,
     initializeAuth,
     login,
+    register,
     logout,
   }
 }

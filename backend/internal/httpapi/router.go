@@ -47,7 +47,7 @@ type sessionResponse struct {
 	CSRFToken     string    `json:"csrfToken,omitempty"`
 }
 
-type loginRequest struct {
+type authRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
@@ -92,6 +92,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	api := engine.Group("/api")
 	authRoutes := api.Group("/auth")
 	authRoutes.GET("/session", handler.getSession)
+	authRoutes.POST("/register", handler.register)
 	authRoutes.POST("/login", handler.login)
 	authRoutes.POST("/logout", handler.requireAuth(), handler.requireCSRF(), handler.logout)
 
@@ -151,7 +152,7 @@ func (h *Handler) getSession(c *gin.Context) {
 }
 
 func (h *Handler) login(c *gin.Context) {
-	var request loginRequest
+	var request authRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid login payload"})
 		return
@@ -180,30 +181,28 @@ func (h *Handler) login(c *gin.Context) {
 		return
 	}
 
-	csrfToken, err := randomToken()
+	h.startSession(c, user, http.StatusOK)
+}
+
+func (h *Handler) register(c *gin.Context) {
+	var request authRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid register payload"})
+		return
+	}
+
+	user, err := db.CreateUser(c.Request.Context(), h.db, request.Username, request.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create csrf token"})
+		switch {
+		case errors.Is(err, db.ErrUsernameTaken):
+			c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
-	session := sessions.Default(c)
-	session.Clear()
-	session.Set(sessionUserIDKey, fmt.Sprintf("%d", user.ID))
-	session.Set(sessionUsernameKey, user.Username)
-	session.Set(sessionCSRFKey, csrfToken)
-	if err := session.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to persist session"})
-		return
-	}
-
-	c.JSON(http.StatusOK, sessionResponse{
-		Authenticated: true,
-		User: &authUser{
-			ID:       fmt.Sprintf("%d", user.ID),
-			Username: user.Username,
-		},
-		CSRFToken: csrfToken,
-	})
+	h.startSession(c, user, http.StatusCreated)
 }
 
 func (h *Handler) logout(c *gin.Context) {
@@ -436,4 +435,31 @@ func randomToken() (string, error) {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(buffer), nil
+}
+
+func (h *Handler) startSession(c *gin.Context, user db.User, statusCode int) {
+	csrfToken, err := randomToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create csrf token"})
+		return
+	}
+
+	session := sessions.Default(c)
+	session.Clear()
+	session.Set(sessionUserIDKey, fmt.Sprintf("%d", user.ID))
+	session.Set(sessionUsernameKey, user.Username)
+	session.Set(sessionCSRFKey, csrfToken)
+	if err := session.Save(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to persist session"})
+		return
+	}
+
+	c.JSON(statusCode, sessionResponse{
+		Authenticated: true,
+		User: &authUser{
+			ID:       fmt.Sprintf("%d", user.ID),
+			Username: user.Username,
+		},
+		CSRFToken: csrfToken,
+	})
 }

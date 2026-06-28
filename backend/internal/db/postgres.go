@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -17,6 +18,9 @@ import (
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]{3,64}$`)
 
 var ErrServerNotFound = errors.New("server not found")
+var ErrUsernameTaken = errors.New("username already exists")
+
+const MinPasswordLength = 8
 
 type User struct {
 	ID           int64
@@ -121,8 +125,8 @@ func EnsureBootstrapUser(ctx context.Context, pool *pgxpool.Pool, username strin
 		return fmt.Errorf("invalid ADMIN_USERNAME, only 3-64 chars of letters, digits, _, -, . are allowed")
 	}
 
-	if len(password) < 8 {
-		return fmt.Errorf("ADMIN_PASSWORD must be at least 8 characters")
+	if !ValidatePassword(password) {
+		return fmt.Errorf("ADMIN_PASSWORD must be at least %d characters", MinPasswordLength)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -141,6 +145,38 @@ DO UPDATE SET password_hash = EXCLUDED.password_hash`
 	}
 
 	return nil
+}
+
+func CreateUser(ctx context.Context, pool *pgxpool.Pool, username string, password string) (User, error) {
+	username = strings.TrimSpace(username)
+	if !ValidateUsername(username) {
+		return User{}, fmt.Errorf("username must be 3-64 characters and only contain letters, digits, _, -, .")
+	}
+	if !ValidatePassword(password) {
+		return User{}, fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, fmt.Errorf("hash password: %w", err)
+	}
+
+	const statement = `
+INSERT INTO users (username, password_hash)
+VALUES ($1, $2)
+RETURNING id, username, password_hash`
+
+	var user User
+	if err := pool.QueryRow(ctx, statement, username, string(hash)).Scan(&user.ID, &user.Username, &user.PasswordHash); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return User{}, ErrUsernameTaken
+		}
+
+		return User{}, fmt.Errorf("insert user: %w", err)
+	}
+
+	return user, nil
 }
 
 func FindUserByUsername(ctx context.Context, pool *pgxpool.Pool, username string) (User, error) {
@@ -489,6 +525,10 @@ func createCommandsToConfigs(commands []CreateCommandInput) []CommandConfig {
 
 func ValidateUsername(username string) bool {
 	return usernamePattern.MatchString(strings.TrimSpace(username))
+}
+
+func ValidatePassword(password string) bool {
+	return len(password) >= MinPasswordLength
 }
 
 func CheckPassword(hash string, password string) error {

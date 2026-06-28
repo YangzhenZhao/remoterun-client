@@ -91,6 +91,7 @@ docker-compose down -v
 说明：
 
 - 首次启动会自动初始化数据库，并根据 `.env` 中的 `ADMIN_USERNAME / ADMIN_PASSWORD` 创建或更新管理员账号
+- 除了预置管理员账号，其他用户也可以在登录页自行注册并立即登录
 - 生产环境建议将 `COOKIE_SECURE=true`，并把 `APP_ORIGIN` 改成真实 HTTPS 域名
 - 后端镜像构建会读取根目录 `.env` 里的 `GOPROXY` 作为 `go mod download` 的模块代理
 
@@ -177,6 +178,7 @@ ADMIN_PASSWORD=change-this-password
 
 - `SESSION_SECRET` 至少 32 个字符
 - `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 会在启动时自动创建或更新一个管理员账号
+- 普通用户可通过前端登录页自助注册，不需要手动写入数据库
 - 生产环境建议把 `COOKIE_SECURE=true`，并通过 HTTPS 提供服务
 
 启动后端：
@@ -229,6 +231,7 @@ go build ./...
 认证接口：
 
 - `GET /api/auth/session`
+- `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 
