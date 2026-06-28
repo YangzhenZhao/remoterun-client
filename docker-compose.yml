@@ -31,6 +31,7 @@ services:
       DATA_DIR: /app/data
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-remoterun}?sslmode=disable
       SESSION_NAME: ${SESSION_NAME:-remoterun_session}
+      SESSION_MAX_AGE: ${SESSION_MAX_AGE:-2160h}
       SESSION_SECRET: ${SESSION_SECRET:-change-this-session-secret-please-32chars}
       UPSTREAM_TIMEOUT: 60s
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}

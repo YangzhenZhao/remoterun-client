@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
@@ -78,7 +79,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	store.Options(sessions.Options{
 		Path:     "/",
 		HttpOnly: true,
-		MaxAge:   60 * 60 * 24,
+		MaxAge:   int(cfg.SessionMaxAge / time.Second),
 		Secure:   cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	})

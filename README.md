@@ -45,6 +45,7 @@ cp .env.example .env
 
 ```bash
 SESSION_SECRET=change-this-session-secret-please-32chars
+SESSION_MAX_AGE=2160h
 ADMIN_PASSWORD=change-this-password
 APP_ORIGIN=http://localhost:8081
 FRONTEND_PORT=8081
@@ -168,6 +169,7 @@ ALLOWED_ORIGIN=http://localhost:5173
 COOKIE_SECURE=false
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/remoterun?sslmode=disable
 SESSION_NAME=remoterun_session
+SESSION_MAX_AGE=2160h
 SESSION_SECRET=replace-with-a-random-32-char-secret
 UPSTREAM_TIMEOUT=60s
 ADMIN_USERNAME=admin
@@ -177,6 +179,7 @@ ADMIN_PASSWORD=change-this-password
 说明：
 
 - `SESSION_SECRET` 至少 32 个字符
+- `SESSION_MAX_AGE` 使用 Go duration 格式，默认 `2160h`，即 90 天
 - `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 会在启动时自动创建或更新一个管理员账号
 - 普通用户可通过前端登录页自助注册，不需要手动写入数据库
 - 生产环境建议把 `COOKIE_SECURE=true`，并通过 HTTPS 提供服务

@@ -14,6 +14,7 @@ type Config struct {
 	CookieSecure      bool
 	DatabaseURL       string
 	SessionName       string
+	SessionMaxAge     time.Duration
 	SessionSecret     string
 	UpstreamTimeout   time.Duration
 	BootstrapUsername string
@@ -27,6 +28,7 @@ func Load() (Config, error) {
 		CookieSecure:      getEnvBool("COOKIE_SECURE", false),
 		DatabaseURL:       strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		SessionName:       getEnv("SESSION_NAME", "remoterun_session"),
+		SessionMaxAge:     getEnvDuration("SESSION_MAX_AGE", 90*24*time.Hour),
 		SessionSecret:     strings.TrimSpace(os.Getenv("SESSION_SECRET")),
 		UpstreamTimeout:   getEnvDuration("UPSTREAM_TIMEOUT", 60*time.Second),
 		BootstrapUsername: strings.TrimSpace(os.Getenv("ADMIN_USERNAME")),
@@ -39,6 +41,10 @@ func Load() (Config, error) {
 
 	if len(cfg.SessionSecret) < 32 {
 		return Config{}, fmt.Errorf("SESSION_SECRET must be at least 32 characters")
+	}
+
+	if cfg.SessionMaxAge <= 0 {
+		return Config{}, fmt.Errorf("SESSION_MAX_AGE must be greater than 0")
 	}
 
 	return cfg, nil
